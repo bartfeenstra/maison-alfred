@@ -16,6 +16,31 @@ services:
           - db
     environment:
       MYSQL_ROOT_PASSWORD: '${MAISON_DB_ROOT_PASSWORD}'
+  deepspeech:
+    image: alfred:deepspeech
+    build: ./deepspeech
+    expose:
+     - "80"
+#    ports:
+#     - "8087:80"
+    networks:
+      maison:
+        aliases:
+          - deepspeech
+  mycroft:
+    image: alfred:mycroft
+    build: ./mycroft
+    environment:
+      - PULSE_SERVER=unix:/run/user/1000/pulse/native
+    networks:
+      maison:
+        aliases:
+          - mycroft
+    volumes:
+      # @todo Is there a cross-platform environment variable with the current user ID?
+      - /run/user/1000/pulse:/run/user/1000/pulse
+    # @todo Do we need this for audio access?
+    privileged: true
   openhab:
     image: maison:openhab
     build: ./openhab
