@@ -15,6 +15,7 @@ addons:
     - network.maison
     - ola.maison
     - hab.maison
+    - monitor.maison
 
 before_install:
   - sudo /etc/init.d/mysql stop
@@ -26,4 +27,5 @@ before_script:
   - ./bin/provision
 
 script:
+  - docker ps
   - ./bin/test
