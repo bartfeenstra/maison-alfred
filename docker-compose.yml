@@ -40,7 +40,8 @@ services:
       - db
       - ola
   ola:
-    image: bartfeenstra/ola:0.1
+    image: maison:ola
+    build: ./services/ola
     restart: always
     expose:
      - '9010'
