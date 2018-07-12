@@ -17,6 +17,8 @@ fi
 ensure_env_mode
 mkdir -p ./services/db/data
 mkdir -p ./services/network/data
+mkdir -p ./services/network/data/dnsmasq.d
+mkdir -p ./services/network/data/pihole
 mkdir -p ./services/web/data
 mkdir -p ./services/web/data/letsencrypt
 sudo chown -R :docker ./services/*/data

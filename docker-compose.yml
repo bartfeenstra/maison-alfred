@@ -131,6 +131,21 @@ services:
     network_mode: host
     environment:
       RUNAS_UID0: 'false'
+  pihole:
+    image: 'diginc/pi-hole:latest'
+    restart: always
+    volumes:
+      - '/etc/localtime:/etc/localtime:ro'
+      - '/etc/timezone:/etc/timezone:ro'
+      - './services/pihole/data/dnsmasq.d:/etc/dnsmasq.d'
+      - './services/pihole/data/pihole:/etc/pihole'
+    networks:
+      maison:
+        aliases:
+          - pihole
+    environment:
+      ServerIP: '${MAISON_HOST_IP}'
+      VIRTUAL_HOST: '${MAISON_PIHOLE_DOMAIN}'
   web:
     image: maison:web
     build: ./services/web
