@@ -21,6 +21,12 @@ before_install:
   - sudo /etc/init.d/mysql stop
 
 before_script:
+  - ip a
+  - echo YAMAN
+  - echo YAMAN
+  - echo YAMAN
+  - echo YAMAN
+  - ip route
   - ./bin/generate-env-passwords ./travis-ci/.env > .env
   - ./bin/build
   - ./bin/start
