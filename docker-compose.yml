@@ -3,17 +3,32 @@ services:
   consul:
     image: maison:consul
     build: ./services/consul
-    restart: always
+    restart: unless-stopped
+    labels:
+      maison.service.port: 8500
+      maison.service.tags: 'maison-web,maison-web-auth,maison-service-check-http'
     volumes:
       - '/etc/localtime:/etc/localtime:ro'
       - '/etc/timezone:/etc/timezone:ro'
-      - '/var/run/docker.sock:/var/run/docker.sock'
       - './data/services/consul:/consul/data'
     network_mode: host
     environment:
       MAISON_LOCAL_IP: '${MAISON_LOCAL_IP}'
       MAISON_CONSUL_MASTER_ACL_TOKEN_UUID: '${MAISON_CONSUL_MASTER_ACL_TOKEN_UUID}'
       MAISON_CONSUL_TEMPLATE_ACL_TOKEN_UUID: '${MAISON_CONSUL_TEMPLATE_ACL_TOKEN_UUID}'
+  registrator:
+    image: maison:registrator
+    build: ./services/registrator
+    restart: unless-stopped
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    networks:
+      - maison
+    environment:
+      MAISON_LOCAL_IP: '${MAISON_LOCAL_IP}'
+      MAISON_CONSUL_MASTER_ACL_TOKEN_UUID: '${MAISON_CONSUL_MASTER_ACL_TOKEN_UUID}'
+    depends_on:
+      - consul
   syslog:
     image: jumanjiman/rsyslog:latest
     restart: always
@@ -24,9 +39,13 @@ services:
       maison:
         aliases:
           - syslog
+    depends_on:
+      - registrator
   db:
-    image: 'mariadb:10.3'
+    image: 'mariadb:10.1'
     restart: always
+    labels:
+      maison.service.port: 3306
     ports:
      - '3306:3306'
     volumes:
@@ -40,10 +59,38 @@ services:
           - db
     environment:
       MYSQL_ROOT_PASSWORD: '${MAISON_DB_ROOT_PASSWORD}'
+    depends_on:
+      - registrator
+  auth:
+    image: 'maison:auth'
+    build: ./services/auth
+    restart: always
+    labels:
+      maison.service.port: 8080
+      maison.service.tags: 'maison-web,maison-service-check-http'
+    volumes:
+      - '/etc/localtime:/etc/localtime:ro'
+      - '/etc/timezone:/etc/timezone:ro'
+    networks:
+      maison:
+        aliases:
+          - auth
+    environment:
+      DB_DATABASE: '${MAISON_AUTH_DB_NAME}'
+      DB_USER: '${MAISON_AUTH_DB_USERNAME}'
+      DB_PASSWORD: '${MAISON_AUTH_DB_PASSWORD}'
+      KEYCLOAK_USER: '${MAISON_AUTH_ADMIN_USERNAME}'
+      KEYCLOAK_PASSWORD: '${MAISON_AUTH_ADMIN_PASSWORD}'
+      PROXY_ADDRESS_FORWARDING: 'true'
+    depends_on:
+      - registrator
+      - db
   mailer:
     image: maison:mailer
     build: ./services/mailer
     restart: always
+    labels:
+      maison.service.port: 25
     volumes:
       - '/etc/localtime:/etc/localtime:ro'
       - '/etc/timezone:/etc/timezone:ro'
@@ -53,121 +100,8 @@ services:
           - mailer
     environment:
       MAISON_MAILER_DOMAIN: '${MAISON_MAILER_DOMAIN}'
-  hab:
-    image: maison:hab
-    build: ./services/hab
-    restart: always
-    tty: true
-    volumes:
-      - '/etc/localtime:/etc/localtime:ro'
-      - '/etc/timezone:/etc/timezone:ro'
-      - './services/hab/conf/conf:/openhab/conf'
-      - './data/services/hab:/openhab/userdata'
-      - './services/hab/conf/userdata/etc:/openhab/userdata/etc'
-    networks:
-      maison:
-        aliases:
-          - hab
-    environment:
-      OPENHAB_HTTP_PORT: '8081'
-      MAISON_HAB_DB_NAME: '${MAISON_HAB_DB_NAME}'
-      MAISON_HAB_DB_USERNAME: '${MAISON_HAB_DB_USERNAME}'
-      MAISON_HAB_DB_PASSWORD: '${MAISON_HAB_DB_PASSWORD}'
     depends_on:
-      - db
-      - ola
-  ola:
-    image: bartfeenstra/ola:0.1
-    restart: always
-    expose:
-     - '9010'
-     - '9090'
-    networks:
-      maison:
-        aliases:
-          - ola
-    environment:
-      OLA_PLUGIN_E131: 1
-      OLA_PLUGIN_FTDIDMX: 1
-    # The FTDI USB device we need can be (un)mounted at any time, and as any /dev/ttyUSB* device. Because we trust this
-    # container, we run it in privileged mode and allow access to any device, so we can choose the right one runtime.
-    privileged: true
-  vcs:
-    image: maison:vcs
-    build: ./services/vcs
-    restart: always
-    volumes:
-      - '/etc/localtime:/etc/localtime:ro'
-      - '/etc/timezone:/etc/timezone:ro'
-      - './data/services/vcs:/data'
-      - './services/vcs/conf/gitea:/data/gitea/conf'
-    ports:
-      - '222:222'
-    networks:
-      maison:
-        aliases:
-          - vcs
-    environment:
-      MAISON_VCS_DB_NAME: '${MAISON_VCS_DB_NAME}'
-      MAISON_VCS_DB_USERNAME: '${MAISON_VCS_DB_USERNAME}'
-      MAISON_VCS_DB_PASSWORD: '${MAISON_VCS_DB_PASSWORD}'
-      MAISON_WEB_PROTOCOL: '${MAISON_WEB_PROTOCOL}'
-      MAISON_WEB_DOMAIN: '${MAISON_WEB_DOMAIN}'
-      MAISON_MAILER_DOMAIN: '${MAISON_MAILER_DOMAIN}'
-    depends_on:
-      - db
-  ci:
-    image: 'drone/drone:0.8'
-    restart: always
-    volumes:
-      - '/etc/localtime:/etc/localtime:ro'
-      - '/etc/timezone:/etc/timezone:ro'
-    ports:
-      - '9000'
-    networks:
-      maison:
-        aliases:
-          - ci
-    environment:
-      DRONE_OPEN: 'true'
-      DRONE_HOST: '${MAISON_WEB_PROTOCOL}://ci.${MAISON_WEB_DOMAIN}'
-      DRONE_SECRET: '${MAISON_CI_DRONE_SECRET}'
-      DRONE_ADMIN: '${MAISON_VCS_ADMIN_USERNAME}'
-      DRONE_GITEA: 'true'
-      DRONE_GITEA_URL: '${MAISON_WEB_PROTOCOL}://vcs.${MAISON_WEB_DOMAIN}'
-      DRONE_GITEA_GIT_USERNAME: '${MAISON_CI_GITEA_USERNAME}'
-      DRONE_GITEA_GIT_PASSWORD: '${MAISON_CI_GITEA_PASSWORD}'
-      DRONE_DATABASE_DRIVER: mysql
-      DRONE_DATABASE_DATASOURCE: '${MAISON_CI_DB_USERNAME}:${MAISON_CI_DB_PASSWORD}@tcp(db:3306)/${MAISON_CI_DB_NAME}?parseTime=true'
-      GIN_MODE: release
-    depends_on:
-      - db
-      - vcs
-  ci-agent:
-    image: 'drone/agent:0.8'
-    restart: always
-    command: agent
-    volumes:
-      - '/etc/localtime:/etc/localtime:ro'
-      - '/etc/timezone:/etc/timezone:ro'
-      - '/var/run/docker.sock:/var/run/docker.sock'
-    networks:
-      - maison
-    environment:
-      DRONE_SERVER: ci:9000
-      DRONE_SECRET: '${MAISON_CI_DRONE_SECRET}'
-    depends_on:
-      - ci
-  network:
-    image: 'jacobalberty/unifi:5.7'
-    restart: always
-    volumes:
-      - '/etc/localtime:/etc/localtime:ro'
-      - '/etc/timezone:/etc/timezone:ro'
-      - './data/services/network:/unifi'
-    network_mode: host
-    environment:
-      RUNAS_UID0: 'false'
+      - registrator
   web:
     image: maison:web
     build: ./services/web
@@ -175,7 +109,6 @@ services:
     volumes:
       - '/etc/localtime:/etc/localtime:ro'
       - '/etc/timezone:/etc/timezone:ro'
-      - './data/services/web/htpasswd:/etc/nginx/htpasswd'
       - './data/services/web/letsencrypt:/etc/letsencrypt'
     expose:
      - '80'
@@ -188,22 +121,44 @@ services:
         aliases:
           - web
           # @todo How can we get rid of these explicitly defined aliases? Do we even need them?
-          - 'network.${MAISON_WEB_DOMAIN}'
-          - 'hab.${MAISON_WEB_DOMAIN}'
-          - 'ola.${MAISON_WEB_DOMAIN}'
-          - 'vcs.${MAISON_WEB_DOMAIN}'
-          - 'ci.${MAISON_WEB_DOMAIN}'
+          - 'auth.${MAISON_WEB_DOMAIN}'
+          - 'oauth2.${MAISON_WEB_DOMAIN}'
     environment:
       MAISON_LOCAL_IP: '${MAISON_LOCAL_IP}'
       MAISON_WEB_PROTOCOL: '${MAISON_WEB_PROTOCOL}'
       MAISON_WEB_DOMAIN: '${MAISON_WEB_DOMAIN}'
       CONSUL_TOKEN: '${MAISON_CONSUL_TEMPLATE_ACL_TOKEN_UUID}'
     depends_on:
+      - registrator
       - consul
+  oauth2:
+    image: maison:oauth2
+    build: ./services/oauth2
+    restart: always
+    labels:
+      maison.service.port: 4180
+      maison.service.tags: 'maison-web'
+    volumes:
+      - '/etc/localtime:/etc/localtime:ro'
+      - '/etc/timezone:/etc/timezone:ro'
+    networks:
+      maison:
+        aliases:
+          - oauth2
+    environment:
+      MAISON_WEB_DOMAIN: '${MAISON_WEB_DOMAIN}'
+      MAISON_WEB_PROTOCOL: '${MAISON_WEB_PROTOCOL}'
+      MAISON_OAUTH2_CLIENT_SECRET: '${MAISON_OAUTH2_CLIENT_SECRET}'
+      MAISON_OAUTH2_COOKIE_SECRET: '${MAISON_OAUTH2_COOKIE_SECRET}'
+    depends_on:
+      - registrator
+      - auth
   dns:
     image: maison:dns
     build: ./services/dns
     restart: always
+    labels:
+      maison.service.port: 5300
     volumes:
       - '/etc/localtime:/etc/localtime:ro'
       - '/etc/timezone:/etc/timezone:ro'
@@ -218,5 +173,7 @@ services:
       MAISON_WEB_DOMAIN: '${MAISON_WEB_DOMAIN}'
       MAISON_LOCAL_IP: '${MAISON_LOCAL_IP}'
       CONSUL_TOKEN: '${MAISON_CONSUL_TEMPLATE_ACL_TOKEN_UUID}'
+    depends_on:
+      - registrator
 networks:
   maison:

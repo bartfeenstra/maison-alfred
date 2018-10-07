@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -Eeumo pipefail
+
+cd "$(dirname "$0")/.."
+
+# Register containers started prior to this one.
+# @todo Move this somewhere else, because the registrator should only handle the services inside its own Docker Compose
+/maison/register maison_consul_1
+
+# Register services as they start.
+/maison/watch

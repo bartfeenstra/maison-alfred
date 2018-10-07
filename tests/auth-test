@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Test Keycloak.
+
+set -Eeuo pipefail
+
+cd "$(dirname "$0")/.."
+
+. ./src/bash/retry
+
+./bin/await maison_auth_1 8080
+retry 5 5 "curl --verbose -f $MAISON_WEB_PROTOCOL://auth.$MAISON_WEB_DOMAIN"

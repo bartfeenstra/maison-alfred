@@ -3,6 +3,9 @@
         server {
             server_name {{ .Name }}.<%= $MAISON_WEB_DOMAIN %>;
             include /etc/nginx/conf.d/server-common.conf.mixin;
+            {{ if .Tags | contains "maison-web-auth" }}
+            include /etc/nginx/conf.d/oauth2-auth-request-location.conf.mixin;
+            {{ end }}
 
             location / {
                 {{ if .Tags | contains "maison-web-auth" }}

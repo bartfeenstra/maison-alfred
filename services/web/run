@@ -15,4 +15,6 @@ nginx -g 'daemon on;'
 consul-template -consul-addr="$MAISON_LOCAL_IP:8500" \
     -template="/maison/web-services.ctmpl:/maison/web-services:/maison/reload-certbot" \
     -template="/etc/nginx/conf.d/10-consul.conf.ctmpl:/etc/nginx/conf.d/10-consul.conf:/maison/reload-nginx" \
+    -template="/etc/nginx/conf.d/location-auth.conf.mixin.ctmpl:/etc/nginx/conf.d/location-auth.conf.mixin:/maison/reload-nginx" \
+    -template="/etc/nginx/conf.d/oauth2-auth-request-location.conf.mixin.ctmpl:/etc/nginx/conf.d/oauth2-auth-request-location.conf.mixin:/maison/reload-nginx" \
     -log-level=debug
