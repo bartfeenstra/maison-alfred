@@ -4,4 +4,4 @@ set -Eeuo pipefail
 
 cd "$(dirname "$0")/.."
 
-./vendor/krab/bin/krab migrate ./data/.krab ./migrations
+docker-compose -p maison down --remove-orphans

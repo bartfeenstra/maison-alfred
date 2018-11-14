@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
+# Test the mail server.
 
 set -Eeuo pipefail
 
 cd "$(dirname "$0")/.."
 
-./vendor/krab/bin/krab migrate ./data/.krab ./migrations
+./bin/await maison_mailer_1 25
